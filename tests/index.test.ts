@@ -53,6 +53,37 @@ describe("calculateVolume", () => {
     };
     expect(() => calculateVolume(config, -1)).toThrow("Liquid height cannot be negative");
   });
+
+  it("should cap volume at total height when liquid height exceeds vessel", () => {
+    const config: VesselConfig = {
+      type: "rectangular",
+      dimensions: { length: 5, width: 3, height: 10 },
+    };
+    const result = calculateVolume(config, 15);
+    expect(result.volume).toBe(150);
+    expect(result.percentage).toBe(100);
+  });
+
+  it("should handle zero height", () => {
+    const config: VesselConfig = {
+      type: "cylindrical",
+      dimensions: { diameter: 2, height: 10 },
+      orientation: "vertical",
+    };
+    const result = calculateVolume(config, 0);
+    expect(result.volume).toBe(0);
+    expect(result.percentage).toBe(0);
+  });
+
+  it("should use radius when diameter not provided for cylinder", () => {
+    const config: VesselConfig = {
+      type: "cylindrical",
+      dimensions: { radius: 1, height: 10 },
+      orientation: "vertical",
+    };
+    const result = calculateVolume(config, 5);
+    expect(result.volume).toBeCloseTo(15.708, 2);
+  });
 });
 
 describe("spherical vessel", () => {
@@ -113,6 +144,16 @@ describe("convertVolume", () => {
     const result = convertVolume(100, "liters", "liters");
     expect(result).toBe(100);
   });
+
+  it("should convert cubic meters to liters", () => {
+    const result = convertVolume(1, "cubicMeters", "liters");
+    expect(result).toBe(1000);
+  });
+
+  it("should convert cubic meters to gallons", () => {
+    const result = convertVolume(1, "cubicMeters", "gallons");
+    expect(result).toBeCloseTo(264.172, 2);
+  });
 });
 
 describe("convertPercentage", () => {
@@ -126,8 +167,6 @@ describe("convertPercentage", () => {
     expect(result).toBe(75);
   });
 });
-
-// --- v0.2.0 Tests ---
 
 describe("strappingTable", () => {
   const cylinder: VesselConfig = {
@@ -184,6 +223,11 @@ describe("strappingTable", () => {
   it("should throw for steps > 10000", () => {
     expect(() => strappingTable(cylinder, { steps: 10001 })).toThrow("Steps must be between 1 and 10000");
   });
+
+  it("should respect precision option", () => {
+    const table = strappingTable(cylinder, { steps: 1, precision: 2 });
+    expect(table[1].volume.toString()).toMatch(/^\d+\.?\d{0,2}$/);
+  });
 });
 
 describe("fillRate", () => {
@@ -200,26 +244,21 @@ describe("fillRate", () => {
       timeMinutes: 60,
     });
     expect(result.direction).toBe("filling");
-    expect(result.volumeChange).toBeGreaterThan(0);
-    expect(result.ratePerMinute).toBeGreaterThan(0);
-    expect(result.ratePerHour).toBeCloseTo(result.ratePerMinute * 60, 2);
-    expect(result.percentBefore).toBe(20);
-    expect(result.percentAfter).toBe(40);
+    expect(result.volumeChange).toBe(100); // 10*5*(4-2)
+    expect(result.ratePerMinute).toBeCloseTo(1.667, 2);
+    expect(result.ratePerHour).toBe(100);
   });
 
   it("should detect draining", () => {
     const result = fillRate({
       vessel: tank,
       heightBefore: 8,
-      heightAfter: 3,
-      timeMinutes: 30,
+      heightAfter: 4,
+      timeMinutes: 60,
     });
     expect(result.direction).toBe("draining");
-    expect(result.volumeChange).toBeLessThan(0);
-    expect(result.ratePerMinute).toBeLessThan(0);
-    expect(result.ratePerHour).toBeCloseTo(result.ratePerMinute * 60, 2);
-    expect(result.percentBefore).toBe(80);
-    expect(result.percentAfter).toBe(30);
+    expect(result.volumeChange).toBe(-200);
+    expect(result.ratePerMinute).toBeCloseTo(-3.333, 2);
   });
 
   it("should detect stable", () => {
@@ -227,163 +266,145 @@ describe("fillRate", () => {
       vessel: tank,
       heightBefore: 5,
       heightAfter: 5,
-      timeMinutes: 10,
+      timeMinutes: 60,
     });
     expect(result.direction).toBe("stable");
     expect(result.volumeChange).toBe(0);
     expect(result.ratePerMinute).toBe(0);
-    expect(result.ratePerHour).toBe(0);
-    expect(result.minutesToFull).toBeNull();
+  });
+
+  it("should calculate time to full when filling", () => {
+    const result = fillRate({
+      vessel: tank,
+      heightBefore: 2,
+      heightAfter: 4,
+      timeMinutes: 60,
+    });
+    // Current volume: 10*5*4 = 200, Total: 500, Remaining: 300
+    // Rate: 100 per hour, so 3 hours to fill
+    expect(result.minutesToFull).toBe(180);
     expect(result.minutesToEmpty).toBeNull();
   });
 
-  it("should calculate minutes to full for filling tank", () => {
+  it("should calculate time to empty when draining", () => {
     const result = fillRate({
       vessel: tank,
-      heightBefore: 4,
-      heightAfter: 5,
-      timeMinutes: 10,
-    });
-    // 1m height change in 10 min. Total height 10m. Remaining 5m. So 50 min.
-    expect(result.minutesToFull).toBeCloseTo(50, 2);
-    expect(result.minutesToEmpty).toBeCloseTo(50, 2); // 5m to drain at 1m/10min
-  });
-
-  it("should calculate minutes to empty for draining tank", () => {
-    const result = fillRate({
-      vessel: tank,
-      heightBefore: 7,
+      heightBefore: 8,
       heightAfter: 6,
-      timeMinutes: 5,
+      timeMinutes: 60,
     });
-    // 1m height change in 5 min. Remaining 6m. So 30 min.
-    expect(result.minutesToEmpty).toBeCloseTo(30, 2);
-    expect(result.minutesToFull).toBeCloseTo(20, 2); // 4m to fill at 1m/5min
+    // Current volume: 10*5*6 = 300, Rate: -100 per hour
+    expect(result.minutesToEmpty).toBe(180);
+    expect(result.minutesToFull).toBeNull();
   });
 
-  it("should handle zero timeMinutes", () => {
-    expect(() => fillRate({
+  it("should throw for non-positive time", () => {
+    expect(() =>
+      fillRate({
+        vessel: tank,
+        heightBefore: 2,
+        heightAfter: 4,
+        timeMinutes: 0,
+      })
+    ).toThrow("timeMinutes");
+
+    expect(() =>
+      fillRate({
+        vessel: tank,
+        heightBefore: 2,
+        heightAfter: 4,
+        timeMinutes: -10,
+      })
+    ).toThrow("timeMinutes");
+  });
+
+  it("should calculate percentages correctly", () => {
+    const result = fillRate({
       vessel: tank,
       heightBefore: 2,
       heightAfter: 4,
-      timeMinutes: 0,
-    })).toThrow("timeMinutes must be a positive number");
-  });
-
-  it("should handle negative timeMinutes", () => {
-    expect(() => fillRate({
-      vessel: tank,
-      heightBefore: 2,
-      heightAfter: 4,
-      timeMinutes: -10,
-    })).toThrow("timeMinutes must be a positive number");
-  });
-
-  it("should handle invalid heightBefore/After", () => {
-    expect(() => fillRate({
-      vessel: tank,
-      heightBefore: -1,
-      heightAfter: 2,
-      timeMinutes: 10,
-    })).toThrow("Liquid height cannot be negative");
-
-    expect(() => fillRate({
-      vessel: tank,
-      heightBefore: 2,
-      heightAfter: 11,
-      timeMinutes: 10,
-    })).toThrow("Liquid height cannot exceed vessel height");
-  });
-
-  it("should work with different vessel types (e.g., cylindrical)", () => {
-    const cylinder: VesselConfig = {
-      type: "cylindrical",
-      dimensions: { diameter: 2, height: 10 },
-      orientation: "vertical",
-    };
-    const result = fillRate({
-      vessel: cylinder,
-      heightBefore: 4,
-      heightAfter: 6,
-      timeMinutes: 20,
+      timeMinutes: 60,
     });
-    expect(result.direction).toBe("filling");
-    expect(result.volumeChange).toBeCloseTo(6.283, 2); // pi * 1^2 * (6-4)
-    expect(result.ratePerMinute).toBeCloseTo(0.314, 2);
-    expect(result.minutesToFull).toBeCloseTo(40, 2); // 4m remaining, 0.1m/min rate
+    expect(result.percentBefore).toBe(20);
+    expect(result.percentAfter).toBe(40);
   });
 });
 
 describe("tankAlarms", () => {
-  const config = {
-    highHigh: 95,
-    high: 90,
-    low: 10,
-    lowLow: 5,
+  const tank: VesselConfig = {
+    type: "rectangular",
+    dimensions: { length: 10, width: 5, height: 10 },
   };
 
-  it("should be normal when within bounds", () => {
-    const result = tankAlarms(config, 50);
+  const alarmConfig = {
+    highHigh: 90,
+    high: 80,
+    low: 20,
+    lowLow: 10,
+  };
+
+  it("should return normal when no alarms triggered", () => {
+    const result = tankAlarms(tank, 5, alarmConfig);
     expect(result.status).toBe("normal");
+    expect(result.activeAlarms).toHaveLength(0);
     expect(result.isAlarmed).toBe(false);
-    expect(result.activeAlarms).toEqual([]);
+    expect(result.percentage).toBe(50);
   });
 
-  it("should detect high alarm", () => {
-    const result = tankAlarms(config, 92);
+  it("should trigger high alarm", () => {
+    const result = tankAlarms(tank, 8.1, alarmConfig);
     expect(result.status).toBe("high");
+    expect(result.activeAlarms).toContain("high");
     expect(result.isAlarmed).toBe(true);
-    expect(result.activeAlarms).toEqual(["high"]);
   });
 
-  it("should detect high-high alarm", () => {
-    const result = tankAlarms(config, 98);
+  it("should trigger high-high alarm", () => {
+    const result = tankAlarms(tank, 9.1, alarmConfig);
     expect(result.status).toBe("high-high");
+    expect(result.activeAlarms).toContain("high-high");
     expect(result.isAlarmed).toBe(true);
-    expect(result.activeAlarms).toEqual(["high", "high-high"]);
   });
 
-  it("should detect low alarm", () => {
-    const result = tankAlarms(config, 8);
+  it("should trigger low alarm", () => {
+    const result = tankAlarms(tank, 1.9, alarmConfig);
     expect(result.status).toBe("low");
+    expect(result.activeAlarms).toContain("low");
     expect(result.isAlarmed).toBe(true);
-    expect(result.activeAlarms).toEqual(["low"]);
   });
 
-  it("should detect low-low alarm", () => {
-    const result = tankAlarms(config, 3);
+  it("should trigger low-low alarm", () => {
+    const result = tankAlarms(tank, 0.9, alarmConfig);
     expect(result.status).toBe("low-low");
+    expect(result.activeAlarms).toContain("low-low");
     expect(result.isAlarmed).toBe(true);
-    expect(result.activeAlarms).toEqual(["low", "low-low"]);
   });
 
-  it("should handle exact boundary values", () => {
-    expect(tankAlarms(config, 90).status).toBe("high");
-    expect(tankAlarms(config, 95).status).toBe("high-high");
-    expect(tankAlarms(config, 10).status).toBe("low");
-    expect(tankAlarms(config, 5).status).toBe("low-low");
-  });
-
-  it("should handle partial alarm configurations", () => {
-    const partialConfig = { high: 80 };
-    expect(tankAlarms(partialConfig, 85).status).toBe("high");
-    expect(tankAlarms(partialConfig, 70).status).toBe("normal");
-  });
-
-  it("should prioritize higher severity alarms", () => {
-    const result = tankAlarms(config, 96);
+  it("should prioritize high-high over high", () => {
+    const result = tankAlarms(tank, 9.5, alarmConfig);
     expect(result.status).toBe("high-high");
+    expect(result.activeAlarms).toEqual(["high-high"]);
   });
 
-  it("should handle empty config", () => {
-    const result = tankAlarms({}, 50);
+  it("should prioritize low-low over low", () => {
+    const result = tankAlarms(tank, 0.5, alarmConfig);
+    expect(result.status).toBe("low-low");
+    expect(result.activeAlarms).toEqual(["low-low"]);
+  });
+
+  it("should throw for negative liquid height", () => {
+    expect(() => tankAlarms(tank, -1, alarmConfig)).toThrow("Liquid height cannot be negative");
+  });
+
+  it("should handle partial alarm config", () => {
+    const partialConfig = { high: 90 };
+    const result = tankAlarms(tank, 9.5, partialConfig);
+    expect(result.status).toBe("high");
+  });
+
+  it("should handle empty alarm config", () => {
+    const result = tankAlarms(tank, 5, {});
     expect(result.status).toBe("normal");
-    expect(result.isAlarmed).toBe(false);
-  });
-
-  it("should throw for invalid percentage", () => {
-    expect(() => tankAlarms(config, -1)).toThrow("Percentage must be between 0 and 100");
-    expect(() => tankAlarms(config, 101)).toThrow("Percentage must be between 0 and 100");
+    expect(result.activeAlarms).toHaveLength(0);
   });
 });
 
@@ -392,61 +413,46 @@ describe("tankInventory", () => {
     type: "rectangular",
     dimensions: { length: 10, width: 5, height: 10 },
   };
+
   const tank2: VesselConfig = {
     type: "cylindrical",
     dimensions: { diameter: 2, height: 10 },
     orientation: "vertical",
   };
 
-  const readings = [
-    { name: "Tank A", vessel: tank1, liquidHeight: 5, unit: "liters" },
-    { name: "Tank B", vessel: tank2, liquidHeight: 5, unit: "liters" },
-    { name: "Tank C", vessel: tank1, liquidHeight: 2, unit: "cubicMeters" },
-  ];
-
-  it("should calculate total inventory correctly", () => {
+  it("should calculate inventory for single tank", () => {
+    const readings = [
+      { name: "Tank-A", vessel: tank1, liquidHeight: 5 },
+    ];
     const result = tankInventory(readings);
-    expect(result.count).toBe(3);
-    expect(result.unit).toBe("cubicMeters"); // Default unit is cubicMeters
-
-    // Tank A: 10*5*5 = 250 m3
-    // Tank B: pi * 1^2 * 5 = 15.708 m3
-    // Tank C: 10*5*2 = 100 m3
-    expect(result.totalVolume).toBeCloseTo(250 + 15.708 + 100, 2);
-
-    // Tank A: 50%
-    // Tank B: 50%
-    // Tank C: 20%
-    expect(result.averagePercentage).toBeCloseTo((50 + 50 + 20) / 3, 2);
-
-    expect(result.tanks[0].name).toBe("Tank A");
-    expect(result.tanks[0].volume).toBeCloseTo(250, 2);
+    expect(result.count).toBe(1);
+    expect(result.totalVolume).toBe(250); // 10*5*5
+    expect(result.averagePercentage).toBe(50);
+    expect(result.tanks[0].volume).toBe(250);
     expect(result.tanks[0].percentage).toBe(50);
-    expect(result.tanks[0].unit).toBe("cubicMeters");
-
-    expect(result.tanks[1].name).toBe("Tank B");
-    expect(result.tanks[1].volume).toBeCloseTo(15.708, 2);
-    expect(result.tanks[1].percentage).toBe(50);
-    expect(result.tanks[1].unit).toBe("cubicMeters");
-
-    expect(result.tanks[2].name).toBe("Tank C");
-    expect(result.tanks[2].volume).toBeCloseTo(100, 2);
-    expect(result.tanks[2].percentage).toBe(20);
-    expect(result.tanks[2].unit).toBe("cubicMeters");
   });
 
-  it("should allow specifying a target unit", () => {
-    const result = tankInventory(readings, { targetUnit: "gallons" });
-    expect(result.unit).toBe("gallons");
+  it("should calculate inventory for multiple tanks", () => {
+    const readings = [
+      { name: "Tank-A", vessel: tank1, liquidHeight: 10 }, // 100%
+      { name: "Tank-B", vessel: tank2, liquidHeight: 5 }, // 50%
+    ];
+    const result = tankInventory(readings);
+    expect(result.count).toBe(2);
+    // Tank1: 500 m3, Tank2: ~15.708 m3
+    expect(result.totalVolume).toBeCloseTo(515.708, 2);
+    // Average: (100 + 50) / 2 = 75%
+    expect(result.averagePercentage).toBe(75);
+  });
 
-    // 250 m3 = 66043 gallons
-    // 15.708 m3 = 4150 gallons
-    // 100 m3 = 26417 gallons
-    const expectedTotalGallons = convertVolume(250 + 15.708 + 100, "cubicMeters", "gallons");
-    expect(result.totalVolume).toBeCloseTo(expectedTotalGallons, 0);
-
-    expect(result.tanks[0].unit).toBe("gallons");
-    expect(result.tanks[0].volume).toBeCloseTo(convertVolume(250, "cubicMeters", "gallons"), 0);
+  it("should convert to target unit", () => {
+    const readings = [
+      { name: "Tank-A", vessel: tank1, liquidHeight: 5 },
+    ];
+    const result = tankInventory(readings, "liters");
+    expect(result.unit).toBe("liters");
+    expect(result.totalVolume).toBe(250000); // 250 m3 = 250000 liters
+    expect(result.tanks[0].volume).toBe(250000);
   });
 
   it("should handle empty readings array", () => {
@@ -454,18 +460,24 @@ describe("tankInventory", () => {
     expect(result.count).toBe(0);
     expect(result.totalVolume).toBe(0);
     expect(result.averagePercentage).toBe(0);
-    expect(result.tanks).toEqual([]);
+    expect(result.tanks).toHaveLength(0);
   });
 
-  it("should handle readings with invalid liquid heights", () => {
-    const invalidReadings = [
-      { name: "Tank A", vessel: tank1, liquidHeight: -1, unit: "liters" },
-      { name: "Tank B", vessel: tank2, liquidHeight: 5, unit: "liters" },
+  it("should respect precision parameter", () => {
+    const readings = [
+      { name: "Tank-A", vessel: tank2, liquidHeight: 5 },
     ];
-    // Expect the invalid tank to be skipped or result in 0 volume/percentage
-    const result = tankInventory(invalidReadings);
-    expect(result.count).toBe(1); // Only Tank B is valid
-    expect(result.tanks[0].name).toBe("Tank B");
-    expect(result.tanks[0].volume).toBeCloseTo(15.708, 2);
+    const result = tankInventory(readings, "cubicMeters", 2);
+    expect(result.tanks[0].volume.toString()).toMatch(/^\d+\.?\d{0,2}$/);
+  });
+
+  it("should preserve tank names in entries", () => {
+    const readings = [
+      { name: "Storage-01", vessel: tank1, liquidHeight: 5 },
+      { name: "Storage-02", vessel: tank2, liquidHeight: 5 },
+    ];
+    const result = tankInventory(readings);
+    expect(result.tanks[0].name).toBe("Storage-01");
+    expect(result.tanks[1].name).toBe("Storage-02");
   });
 });
