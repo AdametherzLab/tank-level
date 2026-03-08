@@ -8,6 +8,8 @@ export interface Dimensions {
   readonly radius?: number;
   readonly topDiameter?: number;
   readonly bottomDiameter?: number;
+  readonly majorDiameter?: number;
+  readonly minorDiameter?: number;
 }
 
 export interface VesselConfig {
@@ -45,8 +47,6 @@ export interface CalculationResult {
   readonly percentage: number;
   readonly unit: Unit;
 }
-
-// --- v0.2.0: Industrial Tank Monitoring ---
 
 export interface StrappingEntry {
   readonly height: number;
