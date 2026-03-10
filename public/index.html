@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tank Configuration & Visualization</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .config-form { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+        .visualization { width: 600px; height: 400px; border: 1px solid #ccc; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tank Configuration</h1>
+        
+        <form 
+            id="tankForm" 
+            class="config-form"
+            hx-post="/api/calculate" 
+            hx-trigger="change" 
+            hx-target="#calculationResult"
+        >
+            <div>
+                <label>Tank Type</label>
+                <select name="type" required>
+                    <option value="cylindrical">Cylindrical</option>
+                    <option value="rectangular">Rectangular</option>
+                    <option value="spherical">Spherical</option>
+                </select>
+            </div>
+
+            <div class="dimensions">
+                <label>Dimensions (meters)</label>
+                <div class="dimension-fields">
+                    <input type="number" name="diameter" placeholder="Diameter" step="0.01" />
+                    <input type="number" name="height" placeholder="Height" step="0.01" required />
+                    <input type="number" name="length" placeholder="Length" step="0.01" />
+                    <input type="number" name="width" placeholder="Width" step="0.01" />
+                </div>
+            </div>
+
+            <div>
+                <label>Liquid Level (meters)</label>
+                <input type="number" name="liquidHeight" step="0.01" required />
+            </div>
+        </form>
+
+        <div id="calculationResult">
+            <h2>Results</h2>
+            <p>Volume: <span id="volumeValue">0</span> m³</p>
+            <p>Fill Percentage: <span id="percentageValue">0</span>%</p>
+        </div>
+
+        <div id="visualization" class="visualization"></div>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

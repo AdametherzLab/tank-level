@@ -1,6 +1,6 @@
 {
   "name": "@adametherzlab/tank-level",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Tank level calculator — volume from height for cylindrical, rectangular, conical & spherical vessels with strapping tables, fill rate, alarms & inventory",
   "type": "module",
   "main": "src/index.ts",
