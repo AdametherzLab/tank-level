@@ -42,4 +42,39 @@ app.get('/api/config', (c) => {
   return c.json(configs);
 });
 
+app.get('/api/config/:id', (c) => {
+  const id = c.req.param('id');
+  const config = tankStore.load(id);
+  if (config) {
+    return c.json(config);
+  } else {
+    return c.json({ error: `Configuration with id ${id} not found` }, 404);
+  }
+});
+
+app.put('/api/config/:id', async (c) => {
+  const id = c.req.param('id');
+  const input = await c.req.json<Partial<SaveConfigInput>>();
+  try {
+    const updated = tankStore.update(id, input);
+    if (updated) {
+      return c.json(updated);
+    } else {
+      return c.json({ error: `Configuration with id ${id} not found` }, 404);
+    }
+  } catch (error: any) {
+    return c.json({ error: error.message }, 400);
+  }
+});
+
+app.delete('/api/config/:id', (c) => {
+  const id = c.req.param('id');
+  const deleted = tankStore.delete(id);
+  if (deleted) {
+    return c.json({ success: true });
+  } else {
+    return c.json({ error: `Configuration with id ${id} not found` }, 404);
+  }
+});
+
 export default app;
