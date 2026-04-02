@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Tank Visualizer</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: system-ui, -apple-system, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            padding: 20px;
+        }
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        h1 { 
+            margin: 0 0 10px 0;
+            font-size: 2.5em;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .subtitle {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        .grid { 
+            display: grid; 
+            grid-template-columns: 380px 1fr; 
+            gap: 20px;
+        }
+        @media (max-width: 900px) {
+            .grid { grid-template-columns: 1fr; }
+        }
+        .panel { 
+            background: white; 
+            padding: 24px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .panel h2 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.3em;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
+        }
+        .form-group { 
+            margin-bottom: 16px; 
+        }
+        label { 
+            display: block; 
+            margin-bottom: 6px; 
+            font-weight: 600; 
+            color: #34495e;
+            font-size: 0.9em;
+        }
+        input, select { 
+            width: 100%; 
+            padding: 10px; 
+            border: 2px solid #e0e0e0; 
+            border-radius: 6px; 
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .dimension-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 12px; 
+        }
+        .slider-container {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .slider-value {
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+        .results { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px; 
+            border-radius: 8px; 
+            margin-top: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .result-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .result-item { 
+            text-align: center;
+        }
+        .result-label {
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+        .result-value { 
+            font-size: 1.8em; 
+            font-weight: bold;
+        }
+        .unit {
+            font-size: 0.6em;
+            opacity: 0.8;
+        }
+        .controls { 
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        button { 
+            flex: 1;
+            background: #667eea; 
+            color: white; 
+            border: none; 
+            padding: 12px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: 600;
+            font-size: 14px;
+            transition: transform 0.1s, background 0.2s;
+        }
+        button:hover { 
+            background: #5568d3;
+            transform: translateY(-1px);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button.secondary {
+            background: #95a5a6;
+        }
+        button.secondary:hover {
+            background: #7f8c8d;
+        }
+        .save-section { 
+            margin-top: 24px; 
+            padding-top: 24px; 
+            border-top: 2px solid #ecf0f1; 
+        }
+        .save-section h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+        .config-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .config-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .config-item button {
+            padding: 6px 12px;
+            font-size: 12px;
+            flex: 0 0 auto;
+        }
+        #visualization {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .visualization-info {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛢️ Interactive Tank Visualizer</h1>
+            <div class="subtitle">Configure dimensions and visualize fill levels in real-time</div>
+        </header>
+        
+        <div class="grid">
+            <div class="panel">
+                <h2>⚙️ Configuration</h2>
+                
+                <div class="form-group">
+                    <label for="tankType">Tank Type</label>
+                    <select id="tankType" onchange="updateFormFields()">
+                        <option value="cylindrical">Cylindrical</option>
+                        <option value="rectangular">Rectangular</option>
+                        <option value="spherical">Spherical</option>
+                        <option value="conical">Conical (Frustum)</option>
+                        <option value="elliptical">Elliptical</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="orientationGroup">
+                    <label for="orientation">Orientation</label>
+                    <select id="orientation" onchange="updateCalculation()">
+                        <option value="vertical">Vertical</option>
+                        <option value="horizontal">Horizontal</option>
+                    </select>
+                </div>
+                
+                <div id="dynamicFields">
+                    <!-- Dynamic fields inserted here -->
+                </div>
+                
+                <div class="slider-container">
+                    <label>Liquid Height / Fill Level</label>
+                    <div class="slider-value">
+                        <span id="fillValue">5.0</span>m
+                    </div>
+                    <input type="range" id="fillSlider" min="0" max="10" step="0.1" value="5" oninput="handleFillChange(this.value)">
+                </div>
+                
+                <div class="results">
+                    <div class="result-grid">
+                        <div class="result-item">
+                            <div class="result-label">Volume</div>
+                            <div class="result-value">
+                                <span id="volumeDisplay">-</span>
+                                <span class="unit">m³</span>
+                            </div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">Capacity</div>
+                            <div class="result-value">
+                                <span id="percentDisplay">-</span>
+                                <span class="unit">%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <button onclick="animateFill()">▶ Animate</button>
+                    <button class="secondary" onclick="resetFill()">Reset</button>
+                </div>
+                
+                <div class="save-section">
+                    <h3>💾 Saved Configurations</h3>
+                    <div class="form-group">
+                        <input type="text" id="configName" placeholder="Enter configuration name...">
+                    </div>
+                    <div class="controls">
+                        <button onclick="saveConfiguration()">Save Current</button>
+                        <button class="secondary" onclick="refreshSavedList()">Refresh List</button>
+                    </div>
+                    <div id="savedConfigs" class="config-list"></div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2>📊 Visualization</h2>
+                <div id="visualization"></div>
+                <div class="visualization-info">
+                    Real-time preview • Adjust sliders to see changes instantly
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/visualizer.js"></script>
+    <script>
+        let visualizer;
+        let currentConfig = {
+            type: 'cylindrical',
+            dimensions: { diameter: 2, height: 10 },
+            orientation: 'vertical'
+        };
+        let animationInterval = null;
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            visualizer = new TankVisualizer(document.getElementById('visualization'), {
+                width: 800,
+                height: 500
+            });
+            updateFormFields();
+            refreshSavedList();
+        });
+
+        function updateFormFields() {
+            const type = document.getElementById('tankType').value;
+            const container = document.getElementById('dynamicFields');
+            const orientationGroup = document.getElementById('orientationGroup');
+            
+            // Show/hide orientation based on type
+            orientationGroup.style.display = type === 'cylindrical' ? 'block' : 'none';
+            
+            let html = '';
+            
+            switch(type) {
+                case 'cylindrical':
+                    html = `
+                        <div class="dimension-grid">
+                            <div class="form-group">
+                                <label>Diameter (m)</label>
+                                <input type="number" id="diameter" value="2" step="0.1" min="0.1" onchange="updateCalculation()">
+                            </div>
+                            <div class="form-group">
+                                <label>Height (m)</label>
+                                <input type="number" id="height" value="10" step="0.1" min="0.1" onchange="updateCalculation()">
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'rectangular':
+                    html = `
+                        <div class="dimension-grid">
+                            <div class="form-group">
+                                <label>Length (m)</label>
+                                <input type="number" id="length" value="5" step="0.1" min="0.1" onchange="updateCalculation()">
+                            </div>
+                            <div class="form-group">
+                                <label>Width (m)</label>
+                                <input type="number" id="width" value="3" step="0.1" min="0.1" onchange="updateCalculation()">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Height (m)</label>
+                            <input type="number" id="height" value="10" step="0.1" min="0.1" onchange="updateCalculation()">
+                        </div>
+                    `;
+                    break;
+                case 'spherical':
+                    html = `
+                        <div class="form-group">
+                            <label>Diameter (m)</label>
+                            <input type="number" id="diameter" value="4" step="0.1" min="0.1" onchange="updateCalculation()">
+                        </div>
+                    `;
+                    break;
+                case 'conical':
+                    html = `
+                        <div class="dimension-grid">
+                            <div class="form-group">
+                                <label>Top Diameter (m)</label>
+                                <input type="number" id="topDiameter" value="2" step="0.1" min="0.1" onchange="updateCalculation()">
+                            </div>
+                            <div class="form-group">
+                                <label>Bottom Diameter (m)</label>
+                                <input type="number" id="bottomDiameter" value="4" step="0.1" min="0.1" onchange="updateCalculation()">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Height (m)</label>
+                            <input type="number" id="height" value="10" step="0.1" min="0.1" onchange="updateCalculation()">
+                        </div>
+                    `;
+                    break;
+                case 'elliptical':
+                    html = `
+                        <div class="dimension-grid">
+                            <div class="form-group">
+                                <label>Major Diameter (m)</label>
+                                <input type="number" id="majorDiameter" value="4" step="0.1" min="0.1" onchange="updateCalculation()">
+                            </div>
+                            <div class="form-group">
+                                <label>Minor Diameter (m)</label>
+                                <input type="number" id="minorDiameter" value="2" step="0.1" min="0.1" onchange="updateCalculation()">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Length (m)</label>
+                            <input type="number" id="length" value="10" step="0.1" min="0.1" onchange="updateCalculation()">
+                        </div>
+                    `;
+                    break;
+            }
+            
+            container.innerHTML = html;
+            updateCalculation();
+        }
+
+        function gatherDimensions() {
+            const type = document.getElementById('tankType').value;
+            const dims = {};
+            
+            const inputs = document.querySelectorAll('#dynamicFields input');
+            inputs.forEach(input => {
+                dims[input.id] = parseFloat(input.value) || 0;
+            });
+            
+            return dims;
+        }
+
+        function getMaxFillHeight() {
+            const type = document.getElementById('tankType').value;
+            const dims = gatherDimensions();
+            
+            switch(type) {
+                case 'cylindrical':
+                    return document.getElementById('orientation').value === 'horizontal' 
+                        ? (dims.diameter || 1) 
+                        : (dims.height || 1);
+                case 'rectangular':
+                case 'conical':
+                    return dims.height || 1;
+                case 'spherical':
+                    return dims.diameter || 1;
+                case 'elliptical':
+                    return dims.minorDiameter || 1;
+                default:
+                    return 10;
+            }
+        }
+
+        function updateCalculation() {
+            const type = document.getElementById('tankType').value;
+            const dims = gatherDimensions();
+            const orientation = type === 'cylindrical' ? document.getElementById('orientation').value : undefined;
+            
+            currentConfig = { type, dimensions: dims };
+            if (orientation) currentConfig.orientation = orientation;
+            
+            // Update slider max
+            const maxHeight = getMaxFillHeight();
+            const slider = document.getElementById('fillSlider');
+            slider.max = maxHeight;
+            
+            // Ensure current value is within bounds
+            if (parseFloat(slider.value) > maxHeight) {
+                slider.value = maxHeight;
+            }
+            
+            const fillLevel = parseFloat(slider.value);
+            document.getElementById('fillValue').textContent = fillLevel.toFixed(1);
+            
+            // Update visualization
+            if (visualizer) {
+                visualizer.updateTank(currentConfig, fillLevel);
+            }
+            
+            // Calculate volume via API
+            calculateVolume(fillLevel);
+        }
+
+        async function calculateVolume(liquidHeight) {
+            try {
+                const response = await fetch('/api/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        vessel: currentConfig,
+                        liquidHeight: parseFloat(liquidHeight)
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('volumeDisplay').textContent = data.volume.toFixed(2);
+                    document.getElementById('percentDisplay').textContent = data.percentage.toFixed(1);
+                }
+            } catch (err) {
+                console.error('Calculation error:', err);
+            }
+        }
+
+        function handleFillChange(value) {
+            updateCalculation();
+        }
+
+        function animateFill() {
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+                return;
+            }
+            
+            const slider = document.getElementById('fillSlider');
+            const max = parseFloat(slider.max);
+            let current = 0;
+            const step = max / 100;
+            
+            slider.value = 0;
+            updateCalculation();
+            
+            animationInterval = setInterval(() => {
+                current += step;
+                if (current >= max) {
+                    current = max;
+                    clearInterval(animationInterval);
+                    animationInterval = null;
+                }
+                slider.value = current;
+                updateCalculation();
+            }, 30);
+        }
+
+        function resetFill() {
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+            }
+            document.getElementById('fillSlider').value = 0;
+            updateCalculation();
+        }
+
+        async function saveConfiguration() {
+            const name = document.getElementById('configName').value.trim();
+            if (!name) {
+                alert('Please enter a configuration name');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        vessel: currentConfig
+                    })
+                });
+                
+                if (response.ok) {
+                    document.getElementById('configName').value = '';
+                    refreshSavedList();
+                    alert('Configuration saved successfully!');
+                } else {
+                    const err = await response.json();
+                    alert('Error: ' + (err.error || 'Failed to save'));
+                }
+            } catch (err) {
+                alert('Error saving configuration');
+            }
+        }
+
+        async function refreshSavedList() {
+            try {
+                const response = await fetch('/api/config');
+                const configs = await response.json();
+                
+                const container = document.getElementById('savedConfigs');
+                if (configs.length === 0) {
+                    container.innerHTML = '<div style="color: #999; text-align: center; padding: 20px;">No saved configurations</div>';
+                    return;
+                }
+                
+                container.innerHTML = configs.map(c => `
+                    <div class="config-item">
+                        <div>
+                            <strong>${escapeHtml(c.name)}</strong>
+                            <div style="font-size: 0.85em; color: #666;">${c.vessel.type}</div>
+                        </div>
+                        <div>
+                            <button onclick='loadConfig(${JSON.stringify(c.vessel).replace(/'/g, "&#39;")})'>Load</button>
+                            <button class="secondary" onclick='deleteConfig("${c.id}")'>Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Error loading configs:', err);
+            }
+        }
+
+        function loadConfig(config) {
+            document.getElementById('tankType').value = config.type;
+            updateFormFields();
+            
+            // Set values
+            Object.entries(config.dimensions).forEach(([key, value]) => {
+                const input = document.getElementById(key);
+                if (input) input.value = value;
+            });
+            
+            if (config.orientation) {
+                document.getElementById('orientation').value = config.orientation;
+            }
+            
+            updateCalculation();
+        }
+
+        async function deleteConfig(id) {
+            if (!confirm('Delete this configuration?')) return;
+            
+            try {
+                const response = await fetch(`/api/config/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    refreshSavedList();
+                }
+            } catch (err) {
+                console.error('Error deleting config:', err);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

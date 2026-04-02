@@ -1,22 +1,15 @@
-import type { VesselConfig, Dimensions } from './types';
-
 /**
- * Canvas-based tank visualizer for real-time rendering of vessel geometry and fill levels.
- * Replaces Three.js dependency with HTML5 Canvas for zero-dependency browser rendering.
+ * Canvas-based Tank Visualizer for Browser
+ * ES Module version of the TypeScript visualizer
  */
-export class TankVisualizer {
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private container: HTMLElement;
-  private currentConfig: VesselConfig | null = null;
-  private currentFillLevel: number = 0;
-  private width: number = 600;
-  private height: number = 400;
 
-  constructor(container: HTMLElement, options?: { width?: number; height?: number }) {
+export class TankVisualizer {
+  constructor(container, options = {}) {
     this.container = container;
-    this.width = options?.width ?? 600;
-    this.height = options?.height ?? 400;
+    this.width = options.width ?? 600;
+    this.height = options.height ?? 400;
+    this.currentConfig = null;
+    this.currentFillLevel = 0;
     
     this.canvas = document.createElement('canvas');
     this.canvas.width = this.width;
@@ -29,33 +22,27 @@ export class TankVisualizer {
     
     container.appendChild(this.canvas);
     
-    const ctx = this.canvas.getContext('2d');
-    if (!ctx) throw new Error('Could not initialize canvas context');
-    this.ctx = ctx;
+    this.ctx = this.canvas.getContext('2d');
+    if (!this.ctx) throw new Error('Could not initialize canvas context');
     
     this.drawPlaceholder();
   }
 
-  private drawPlaceholder() {
+  drawPlaceholder() {
     this.ctx.clearRect(0, 0, this.width, this.height);
     this.ctx.fillStyle = '#999';
     this.ctx.font = '16px system-ui, sans-serif';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText('Configure tank dimensions to visualize', this.width / 2, this.height / 2);
+    this.ctx.fillText('Configure tank to visualize', this.width / 2, this.height / 2);
   }
 
-  /**
-   * Update the tank visualization with new configuration and fill level.
-   * @param config - Vessel configuration
-   * @param fillLevel - Current liquid height/fill level
-   */
-  updateTank(config: VesselConfig, fillLevel: number) {
+  updateTank(config, fillLevel) {
     this.currentConfig = config;
     this.currentFillLevel = fillLevel;
     this.render();
   }
 
-  private render() {
+  render() {
     if (!this.currentConfig) return;
     
     this.ctx.clearRect(0, 0, this.width, this.height);
@@ -83,10 +70,10 @@ export class TankVisualizer {
     this.drawOverlay();
   }
 
-  private drawCylindrical() {
-    const dims = this.currentConfig!.dimensions;
-    const isHorizontal = this.currentConfig!.orientation === 'horizontal';
-    const diameter = dims.diameter || dims.radius! * 2 || 1;
+  drawCylindrical() {
+    const dims = this.currentConfig.dimensions;
+    const isHorizontal = this.currentConfig.orientation === 'horizontal';
+    const diameter = dims.diameter || dims.radius * 2 || 1;
     const tankHeight = dims.height || 1;
     const maxDim = isHorizontal ? tankHeight : diameter;
     const fillPercent = Math.min(100, Math.max(0, (this.currentFillLevel / (isHorizontal ? diameter : tankHeight)) * 100));
@@ -111,12 +98,10 @@ export class TankVisualizer {
     const x = centerX - w / 2;
     const y = centerY - h / 2;
     
-    // Draw tank outline
     this.ctx.strokeStyle = '#2c3e50';
     this.ctx.lineWidth = 3;
     this.ctx.strokeRect(x, y, w, h);
     
-    // Draw end caps for cylinder effect
     this.ctx.beginPath();
     this.ctx.ellipse(x, y + h / 2, 8, h / 2, 0, 0, Math.PI * 2);
     this.ctx.stroke();
@@ -124,12 +109,10 @@ export class TankVisualizer {
     this.ctx.ellipse(x + w, y + h / 2, 8, h / 2, 0, 0, Math.PI * 2);
     this.ctx.stroke();
     
-    // Draw liquid
     const liquidH = (h * fillPercent) / 100;
     this.ctx.fillStyle = 'rgba(52, 152, 219, 0.7)';
     this.ctx.fillRect(x, y + h - liquidH, w, liquidH);
     
-    // Draw fill line
     this.ctx.strokeStyle = '#2980b9';
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([5, 5]);
@@ -140,8 +123,8 @@ export class TankVisualizer {
     this.ctx.setLineDash([]);
   }
 
-  private drawRectangular() {
-    const dims = this.currentConfig!.dimensions;
+  drawRectangular() {
+    const dims = this.currentConfig.dimensions;
     const length = dims.length || 1;
     const width = dims.width || 1;
     const height = dims.height || 1;
@@ -157,7 +140,6 @@ export class TankVisualizer {
     const x = centerX - w / 2;
     const y = centerY - h / 2;
     
-    // Draw 3D effect - top face
     this.ctx.fillStyle = '#ecf0f1';
     this.ctx.beginPath();
     this.ctx.moveTo(x, y);
@@ -168,7 +150,6 @@ export class TankVisualizer {
     this.ctx.fill();
     this.ctx.stroke();
     
-    // Draw 3D effect - right face
     this.ctx.fillStyle = '#bdc3c7';
     this.ctx.beginPath();
     this.ctx.moveTo(x + w, y);
@@ -179,17 +160,14 @@ export class TankVisualizer {
     this.ctx.fill();
     this.ctx.stroke();
     
-    // Draw front face outline
     this.ctx.strokeStyle = '#2c3e50';
     this.ctx.lineWidth = 3;
     this.ctx.strokeRect(x, y, w, h);
     
-    // Draw liquid
     const liquidH = (h * fillPercent) / 100;
     this.ctx.fillStyle = 'rgba(52, 152, 219, 0.7)';
     this.ctx.fillRect(x, y + h - liquidH, w, liquidH);
     
-    // Top liquid surface (3D effect)
     if (fillPercent > 0) {
       this.ctx.fillStyle = 'rgba(41, 128, 185, 0.8)';
       this.ctx.beginPath();
@@ -202,23 +180,21 @@ export class TankVisualizer {
     }
   }
 
-  private drawSpherical() {
-    const dims = this.currentConfig!.dimensions;
-    const diameter = dims.diameter || dims.radius! * 2 || 1;
+  drawSpherical() {
+    const dims = this.currentConfig.dimensions;
+    const diameter = dims.diameter || dims.radius * 2 || 1;
     const fillPercent = Math.min(100, Math.max(0, (this.currentFillLevel / diameter) * 100));
     
     const centerX = this.width / 2;
     const centerY = this.height / 2;
     const radius = Math.min(this.width, this.height) / 3;
     
-    // Draw tank outline
     this.ctx.strokeStyle = '#2c3e50';
     this.ctx.lineWidth = 3;
     this.ctx.beginPath();
     this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
     this.ctx.stroke();
     
-    // Draw liquid
     this.ctx.save();
     this.ctx.beginPath();
     this.ctx.arc(centerX, centerY, radius - 2, 0, Math.PI * 2);
@@ -230,7 +206,6 @@ export class TankVisualizer {
     
     this.ctx.restore();
     
-    // Draw fill line
     this.ctx.strokeStyle = '#2980b9';
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([5, 5]);
@@ -241,8 +216,8 @@ export class TankVisualizer {
     this.ctx.setLineDash([]);
   }
 
-  private drawConical() {
-    const dims = this.currentConfig!.dimensions;
+  drawConical() {
+    const dims = this.currentConfig.dimensions;
     const height = dims.height || 1;
     const topDiameter = dims.topDiameter || 0;
     const bottomDiameter = dims.bottomDiameter || 0;
@@ -260,7 +235,6 @@ export class TankVisualizer {
     const x = centerX;
     const y = centerY - h / 2;
     
-    // Draw tank outline (trapezoid)
     this.ctx.strokeStyle = '#2c3e50';
     this.ctx.lineWidth = 3;
     this.ctx.beginPath();
@@ -271,7 +245,6 @@ export class TankVisualizer {
     this.ctx.closePath();
     this.ctx.stroke();
     
-    // Draw liquid
     const liquidH = (h * fillPercent) / 100;
     const liquidTopW = bottomW + (topW - bottomW) * (liquidH / h);
     
@@ -285,9 +258,8 @@ export class TankVisualizer {
     this.ctx.fill();
   }
 
-  private drawElliptical() {
-    // Render as horizontal cylinder for visualization purposes
-    const dims = this.currentConfig!.dimensions;
+  drawElliptical() {
+    const dims = this.currentConfig.dimensions;
     const major = dims.majorDiameter || 1;
     const minor = dims.minorDiameter || 1;
     const length = dims.length || 1;
@@ -303,12 +275,10 @@ export class TankVisualizer {
     const x = centerX - w / 2;
     const y = centerY - h / 2;
     
-    // Draw tank outline (ellipse sides)
     this.ctx.strokeStyle = '#2c3e50';
     this.ctx.lineWidth = 3;
     this.ctx.strokeRect(x, y, w, h);
     
-    // Draw elliptical ends
     this.ctx.beginPath();
     this.ctx.ellipse(x, centerY, 10, h / 2, 0, 0, Math.PI * 2);
     this.ctx.stroke();
@@ -316,16 +286,14 @@ export class TankVisualizer {
     this.ctx.ellipse(x + w, centerY, 10, h / 2, 0, 0, Math.PI * 2);
     this.ctx.stroke();
     
-    // Draw liquid
     const liquidH = (h * fillPercent) / 100;
     this.ctx.fillStyle = 'rgba(52, 152, 219, 0.7)';
     this.ctx.fillRect(x, y + h - liquidH, w, liquidH);
   }
 
-  private drawOverlay() {
+  drawOverlay() {
     if (!this.currentConfig) return;
     
-    // Draw info box
     this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     this.ctx.fillRect(10, 10, 180, 70);
     this.ctx.strokeStyle = '#ddd';
@@ -340,7 +308,7 @@ export class TankVisualizer {
     this.ctx.fillText(`${Math.min(100, Math.max(0, (this.currentFillLevel / this.getMaxHeight()) * 100)).toFixed(1)}%`, 20, 70);
   }
 
-  private getMaxHeight(): number {
+  getMaxHeight() {
     if (!this.currentConfig) return 1;
     const dims = this.currentConfig.dimensions;
     switch (this.currentConfig.type) {
@@ -358,9 +326,6 @@ export class TankVisualizer {
     }
   }
 
-  /**
-   * Clean up the visualizer and remove canvas from DOM.
-   */
   destroy() {
     this.canvas.remove();
   }
